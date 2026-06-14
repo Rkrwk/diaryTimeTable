@@ -76,6 +76,8 @@ export default function PublicView() {
   const weeks = monthMatrix(new Date());
   const dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const todayIv = todayISO();
+  const curWeekStart = toISODate(mondayOf(new Date()));
+  const curMonthStart = toISODate(firstOfMonth(new Date()));
 
   return (
     <div className="stack-lg">
@@ -130,9 +132,10 @@ export default function PublicView() {
             </section>
           )}
 
-          {(data.reflections?.weekly || data.reflections?.monthly) && (
+          {(data.reflections?.daily || data.reflections?.weekly || data.reflections?.monthly) && (
             <section className="card stack">
               <h2 className="section-title">Reflections</h2>
+              {data.reflections.daily && (<div className="stack-tight"><p className="eyebrow">Today</p><p className="reflection-text">{data.reflections.daily}</p></div>)}
               {data.reflections.weekly && (<div className="stack-tight"><p className="eyebrow">This week</p><p className="reflection-text">{data.reflections.weekly}</p></div>)}
               {data.reflections.monthly && (<div className="stack-tight"><p className="eyebrow">This month</p><p className="reflection-text">{data.reflections.monthly}</p></div>)}
             </section>
@@ -189,10 +192,16 @@ export default function PublicView() {
                   ))}
                 </ul>
               )}
-              {day.reflection && (
+              {day.week_start !== curWeekStart && day.week_reflection && (
                 <div className="stack-tight">
-                  <p className="eyebrow">Reflection</p>
-                  <p className="reflection-text">{day.reflection}</p>
+                  <p className="eyebrow">Week of {day.week_start}</p>
+                  <p className="reflection-text">{day.week_reflection}</p>
+                </div>
+              )}
+              {day.month_start !== curMonthStart && day.month_reflection && (
+                <div className="stack-tight">
+                  <p className="eyebrow">{parseISO(day.month_start).toLocaleDateString(undefined, { month: "long", year: "numeric" })}</p>
+                  <p className="reflection-text">{day.month_reflection}</p>
                 </div>
               )}
               <button type="button" className="link-btn" onClick={() => setDay(null)}>Close</button>
@@ -224,12 +233,6 @@ export default function PublicView() {
                   </li>
                 ))}
               </ul>
-            )}
-            {data.reflections?.daily && (
-              <div className="stack-tight">
-                <p className="eyebrow">Reflection</p>
-                <p className="reflection-text">{data.reflections.daily}</p>
-              </div>
             )}
           </section>
         </>

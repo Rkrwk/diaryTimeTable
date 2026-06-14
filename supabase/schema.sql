@@ -287,6 +287,8 @@ language plpgsql security definer stable set search_path = public as $$
 declare
   v_owner uuid; v_name text;
   v_daytype text := case when extract(dow from p_date) in (0,6) then 'weekend' else 'weekday' end;
+  v_wk date := date_trunc('week',  p_date)::date;  -- Monday of that week
+  v_mo date := date_trunc('month', p_date)::date;  -- first of that month
   v_acts json;
 begin
   select id, coalesce(display_name, username) into v_owner, v_name
@@ -304,9 +306,15 @@ begin
   left join logs l on l.activity_id = a.id and l.owner_id = v_owner and l.log_date = p_date
   where a.owner_id = v_owner and ((a.day_type = v_daytype and a.entry_date is null) or a.entry_date = p_date);
 
-  return json_build_object('owner_name',v_name,'date',to_char(p_date,'YYYY-MM-DD'),
-    'activities',v_acts,
-    'reflection', strip_private((select content from reflections where owner_id=v_owner and period_type='daily' and period_date=p_date)));
+  return json_build_object(
+    'owner_name', v_name,
+    'date', to_char(p_date,'YYYY-MM-DD'),
+    'activities', v_acts,
+    'week_start',  to_char(v_wk,'YYYY-MM-DD'),
+    'week_reflection',  strip_private((select content from reflections where owner_id=v_owner and period_type='weekly'  and period_date=v_wk)),
+    'month_start', to_char(v_mo,'YYYY-MM-DD'),
+    'month_reflection', strip_private((select content from reflections where owner_id=v_owner and period_type='monthly' and period_date=v_mo))
+  );
 end;
 $$;
 
