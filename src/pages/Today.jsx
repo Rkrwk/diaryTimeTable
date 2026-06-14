@@ -85,7 +85,7 @@ export default function Today() {
     if (!add.title.trim()) return;
     const nextOrder = activities.reduce((m, a) => Math.max(m, a.sort_order), 0) + 1;
     const { error } = await supabase.from('activities').insert({
-      owner_id: user.id, title: add.title.trim(), day_type: dayType, category: add.category,
+      owner_id: user.id, title: add.title.trim(), day_type: dayType, category: add.category.trim() || 'rest',
       planned_start: add.planned_start || null, planned_end: add.planned_end || null,
       sort_order: nextOrder, entry_date: date, goal_id: add.goal_id || null,
     });
@@ -298,9 +298,8 @@ export default function Today() {
             <label className="field"><span>Title</span>
               <input type="text" value={add.title} onChange={(e) => setAdd({ ...add, title: e.target.value })} placeholder="What did you do?" required /></label>
             <label className="field"><span>Category</span>
-              <select value={add.category} onChange={(e) => setAdd({ ...add, category: e.target.value })}>
-                <option value="focus">Focus</option><option value="move">Move</option><option value="rest">Rest</option>
-              </select></label>
+              <input list="cat-presets" value={add.category} onChange={(e) => setAdd({ ...add, category: e.target.value })} placeholder="focus, move, rest, or your own" />
+              <datalist id="cat-presets"><option value="focus" /><option value="move" /><option value="rest" /></datalist></label>
             <label className="field"><span>Start</span>
               <input type="time" value={add.planned_start} onChange={(e) => setAdd({ ...add, planned_start: e.target.value })} /></label>
             <label className="field"><span>End</span>

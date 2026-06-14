@@ -113,11 +113,8 @@ export default function Schedule() {
           </label>
           <label className="field">
             <span>Category</span>
-            <select value={form.category} onChange={(e) => update('category', e.target.value)}>
-              <option value="focus">Focus</option>
-              <option value="move">Move</option>
-              <option value="rest">Rest</option>
-            </select>
+            <input list="cat-presets" value={form.category} onChange={(e) => update('category', e.target.value)} placeholder="focus, move, rest, or your own" />
+            <datalist id="cat-presets"><option value="focus" /><option value="move" /><option value="rest" /></datalist>
           </label>
           <label className="field">
             <span>Start</span>

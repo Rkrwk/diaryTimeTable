@@ -51,7 +51,7 @@ create table if not exists activities (
   day_type       text not null check (day_type in ('weekday', 'weekend')),
   planned_start  time,
   planned_end    time,
-  category       text not null default 'rest' check (category in ('focus', 'move', 'rest')),
+  category       text not null default 'rest',
   sort_order     int  not null default 0,
   entry_date     date,
   created_at     timestamptz default now()
