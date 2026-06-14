@@ -130,10 +130,9 @@ export default function PublicView() {
             </section>
           )}
 
-          {(data.reflections?.daily || data.reflections?.weekly || data.reflections?.monthly) && (
+          {(data.reflections?.weekly || data.reflections?.monthly) && (
             <section className="card stack">
               <h2 className="section-title">Reflections</h2>
-              {data.reflections.daily && (<div className="stack-tight"><p className="eyebrow">Today</p><p className="reflection-text">{data.reflections.daily}</p></div>)}
               {data.reflections.weekly && (<div className="stack-tight"><p className="eyebrow">This week</p><p className="reflection-text">{data.reflections.weekly}</p></div>)}
               {data.reflections.monthly && (<div className="stack-tight"><p className="eyebrow">This month</p><p className="reflection-text">{data.reflections.monthly}</p></div>)}
             </section>
@@ -190,7 +189,12 @@ export default function PublicView() {
                   ))}
                 </ul>
               )}
-              {day.reflection && <p className="view-note">{day.reflection}</p>}
+              {day.reflection && (
+                <div className="stack-tight">
+                  <p className="eyebrow">Reflection</p>
+                  <p className="reflection-text">{day.reflection}</p>
+                </div>
+              )}
               <button type="button" className="link-btn" onClick={() => setDay(null)}>Close</button>
             </section>
           )}
@@ -220,6 +224,12 @@ export default function PublicView() {
                   </li>
                 ))}
               </ul>
+            )}
+            {data.reflections?.daily && (
+              <div className="stack-tight">
+                <p className="eyebrow">Reflection</p>
+                <p className="reflection-text">{data.reflections.daily}</p>
+              </div>
             )}
           </section>
         </>
