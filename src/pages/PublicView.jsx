@@ -130,6 +130,15 @@ export default function PublicView() {
             </section>
           )}
 
+          {(data.reflections?.daily || data.reflections?.weekly || data.reflections?.monthly) && (
+            <section className="card stack">
+              <h2 className="section-title">Reflections</h2>
+              {data.reflections.daily && (<div className="stack-tight"><p className="eyebrow">Today</p><p className="reflection-text">{data.reflections.daily}</p></div>)}
+              {data.reflections.weekly && (<div className="stack-tight"><p className="eyebrow">This week</p><p className="reflection-text">{data.reflections.weekly}</p></div>)}
+              {data.reflections.monthly && (<div className="stack-tight"><p className="eyebrow">This month</p><p className="reflection-text">{data.reflections.monthly}</p></div>)}
+            </section>
+          )}
+
           <section className="stack">
             <h2 className="section-title">This month</h2>
             <div className="cal">

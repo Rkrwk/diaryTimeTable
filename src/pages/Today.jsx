@@ -29,6 +29,12 @@ export default function Today() {
   const [add, setAdd] = useState(emptyAdd);
   const [showAdd, setShowAdd] = useState(false);
 
+  // autosave status (the writes already happen automatically; this just reports them)
+  const [saveState, setSaveState] = useState('idle'); // 'idle' | 'saving' | 'saved'
+  const savingRef = useRef(0);
+  function beginSave() { savingRef.current += 1; setSaveState('saving'); }
+  function endSave() { savingRef.current = Math.max(0, savingRef.current - 1); if (savingRef.current === 0) setSaveState('saved'); }
+
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
 
@@ -101,7 +107,9 @@ export default function Today() {
 
   async function updateGoal(a, goalId) {
     setActivities((prev) => prev.map((x) => (x.id === a.id ? { ...x, goal_id: goalId || null } : x)));
+    beginSave();
     const { error } = await supabase.from('activities').update({ goal_id: goalId || null }).eq('id', a.id);
+    endSave();
     if (error) { alert(error.message); load(); }
   }
 
@@ -111,7 +119,9 @@ export default function Today() {
     setEditingId(null);
     if (!title || title === a.title) return;
     setActivities((prev) => prev.map((x) => (x.id === a.id ? { ...x, title } : x)));
+    beginSave();
     const { error } = await supabase.from('activities').update({ title }).eq('id', a.id);
+    endSave();
     if (error) { alert(error.message); load(); }
   }
 
@@ -170,15 +180,19 @@ export default function Today() {
     const existing = logs[activityId] ?? {};
     const merged = { ...existing, owner_id: user.id, activity_id: activityId, log_date: date, completed: existing.completed ?? false, ...patch };
     setLogs((prev) => ({ ...prev, [activityId]: merged }));
+    beginSave();
     const { data, error } = await supabase.from('logs').upsert(merged, { onConflict: 'owner_id,activity_id,log_date' }).select().maybeSingle();
+    endSave();
     if (error) { alert(error.message); return; }
     if (data) setLogs((prev) => ({ ...prev, [activityId]: data }));
   }
 
   async function saveReflection(content) {
+    beginSave();
     const { error } = await supabase.from('reflections').upsert(
       { owner_id: user.id, period_type: 'daily', period_date: date, content },
       { onConflict: 'owner_id,period_type,period_date' });
+    endSave();
     if (error) alert(error.message);
   }
 
@@ -191,7 +205,16 @@ export default function Today() {
       <header className="page-head">
         <p className="eyebrow">{dayType === 'weekend' ? 'Weekend' : 'Weekday'}</p>
         <h1 className="display">{prettyDate()}</h1>
-        <p className="tally">{doneCount}/{activities.length} done</p>
+        <div className="tally-row">
+          <p className="tally">{doneCount}/{activities.length} done</p>
+          <div className="save-bar">
+            <span className={`save-dot ${saveState}`} />
+            <span className="muted small">
+              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Auto-saves as you go"}
+            </span>
+            <button type="button" className="btn save-btn" onClick={() => setSaveState("saved")} title="Changes save automatically">Save</button>
+          </div>
+        </div>
       </header>
 
       {activities.length === 0 ? (
@@ -260,7 +283,7 @@ export default function Today() {
                   </div>
                 </div>
 
-                <input type="text" className="note-input" placeholder="Add a note…" defaultValue={log.note ?? ''}
+                <input type="text" className="note-input" placeholder="Add a note…  (/* */ hides text from shared viewers)" defaultValue={log.note ?? ''}
                   onBlur={(e) => { if ((e.target.value || '') !== (log.note || '')) saveLog(a.id, { note: e.target.value }); }} />
               </li>
             );
@@ -303,6 +326,7 @@ export default function Today() {
 
       <section className="card reflection-card">
         <h2 className="section-title">Today&rsquo;s reflection</h2>
+        <p className="muted small">Tip: wrap private text in /* */ (an unclosed /* hides everything after). Shared viewers will not see it.</p>
         <textarea className="reflection" rows={4} placeholder="How did today go?" value={reflection}
           onChange={(e) => setReflection(e.target.value)} onBlur={(e) => saveReflection(e.target.value)} />
       </section>

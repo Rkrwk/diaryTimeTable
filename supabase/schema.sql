@@ -184,6 +184,18 @@ create policy "update goals" on goals for update using (can_edit(owner_id)) with
 create policy "delete goals" on goals for delete using (can_edit(owner_id));
 
 -- ===== public progress: today + week/month completion + calendar + goals[] =====
+create or replace function strip_private(t text)
+returns text language sql immutable as $$
+  select case when t is null then null else
+    nullif(
+      trim(both E' \t\n' from
+        regexp_replace(
+          regexp_replace(t, '/\*.*?\*/', '', 'gs'),  -- closed /* */ blocks
+          '/\*.*', '', 's')                           -- any dangling /* to end
+      ), '')
+  end;
+$$;
+
 create or replace function get_public_progress(
   p_code text, p_today date, p_day_type text,
   p_week_start date, p_week_end date, p_month_start date, p_month_end date
@@ -192,7 +204,7 @@ returns json
 language plpgsql security definer stable set search_path = public as $$
 declare
   v_owner uuid; v_name text;
-  v_today json; v_week json; v_month json; v_cal json; v_goals json;
+  v_today json; v_week json; v_month json; v_cal json; v_goals json; v_refl json;
 begin
   select id, coalesce(display_name, username) into v_owner, v_name
   from profiles where share_code = upper(p_code);
@@ -203,7 +215,7 @@ begin
     'planned_start', to_char(a.planned_start,'HH24:MI'), 'planned_end', to_char(a.planned_end,'HH24:MI'),
     'completed', coalesce(l.completed,false),
     'actual_start', to_char(l.actual_start,'HH24:MI'), 'actual_end', to_char(l.actual_end,'HH24:MI'),
-    'note', l.note) order by a.sort_order, a.created_at), '[]'::json)
+    'note', strip_private(l.note)) order by a.sort_order, a.created_at), '[]'::json)
     into v_today
   from activities a
   left join logs l on l.activity_id = a.id and l.owner_id = v_owner and l.log_date = p_today
@@ -255,7 +267,14 @@ begin
     into v_goals
   from goals g where g.owner_id = v_owner;
 
-  return json_build_object('owner_name',v_name,'today',v_today,'week',v_week,'month',v_month,'calendar',v_cal,'goals',v_goals);
+  select json_build_object(
+    'daily',   strip_private((select content from reflections where owner_id=v_owner and period_type='daily'   and period_date=p_today)),
+    'weekly',  strip_private((select content from reflections where owner_id=v_owner and period_type='weekly'  and period_date=p_week_start)),
+    'monthly', strip_private((select content from reflections where owner_id=v_owner and period_type='monthly' and period_date=p_month_start))
+  ) into v_refl;
+
+  return json_build_object('owner_name',v_name,'today',v_today,'week',v_week,'month',v_month,
+    'calendar',v_cal,'goals',v_goals,'reflections',v_refl);
 end;
 $$;
 
@@ -279,7 +298,7 @@ begin
     'planned_start', to_char(a.planned_start,'HH24:MI'), 'planned_end', to_char(a.planned_end,'HH24:MI'),
     'completed', coalesce(l.completed,false),
     'actual_start', to_char(l.actual_start,'HH24:MI'), 'actual_end', to_char(l.actual_end,'HH24:MI'),
-    'note', l.note) order by a.sort_order, a.created_at), '[]'::json)
+    'note', strip_private(l.note)) order by a.sort_order, a.created_at), '[]'::json)
     into v_acts
   from activities a
   left join logs l on l.activity_id = a.id and l.owner_id = v_owner and l.log_date = p_date
@@ -287,7 +306,7 @@ begin
 
   return json_build_object('owner_name',v_name,'date',to_char(p_date,'YYYY-MM-DD'),
     'activities',v_acts,
-    'reflection',(select content from reflections where owner_id=v_owner and period_type='daily' and period_date=p_date));
+    'reflection', strip_private((select content from reflections where owner_id=v_owner and period_type='daily' and period_date=p_date)));
 end;
 $$;
 

@@ -122,6 +122,7 @@ export default function Monthly() {
 
       <section className="card reflection-card">
         <h2 className="section-title">Monthly reflection</h2>
+        <p className="muted small">Tip: wrap private text in /* */ (an unclosed /* hides everything after). Shared viewers will not see it.</p>
         <textarea className="reflection" rows={5} placeholder="Zoom out: how did the month go?" value={reflection}
           onChange={(e) => setReflection(e.target.value)} onBlur={(e) => saveReflection(e.target.value)} />
       </section>

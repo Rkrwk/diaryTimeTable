@@ -845,3 +845,46 @@ textarea {
   flex-direction: column;
   gap: 0.85rem;
 }
+
+.stack-tight {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+/* ---------- autosave indicator ---------- */
+.tally-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.25rem;
+}
+.save-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.save-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: var(--border);
+  flex: 0 0 auto;
+}
+.save-dot.saving {
+  background: #d6a32e;
+  animation: pulse 1s ease-in-out infinite;
+}
+.save-dot.saved {
+  background: var(--move);
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.save-btn {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+}

@@ -105,6 +105,7 @@ export default function Weekly() {
 
       <section className="card reflection-card">
         <h2 className="section-title">Weekly reflection</h2>
+        <p className="muted small">Tip: wrap private text in /* */ (an unclosed /* hides everything after). Shared viewers will not see it.</p>
         <textarea className="reflection" rows={4} placeholder="What went well? What to adjust?" value={reflection}
           onChange={(e) => setReflection(e.target.value)} onBlur={(e) => saveReflection(e.target.value)} />
       </section>
