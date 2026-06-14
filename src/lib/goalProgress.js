@@ -14,8 +14,8 @@ export function periodRange(period, base = new Date()) {
 }
 
 // Actual progress for a goal: minutes (metric 'hours') or completion count (metric 'count').
-export async function loadGoalActual(supabase, ownerId, goal) {
-  const { startISO, endISO } = periodRange(goal.period_type);
+export async function loadGoalActual(supabase, ownerId, goal, base = new Date()) {
+  const { startISO, endISO } = periodRange(goal.period_type, base);
   const { data } = await supabase
     .from('logs')
     .select('completed, actual_start, actual_end, activities!inner(goal_id)')

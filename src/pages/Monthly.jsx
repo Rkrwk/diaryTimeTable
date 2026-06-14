@@ -11,16 +11,19 @@ function goalLabel(g, actual) {
 
 export default function Monthly() {
   const { user } = useAuth();
-  const now = new Date();
-  const first = firstOfMonth(now);
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const days = Array.from({ length: last.getDate() }, (_, i) => new Date(now.getFullYear(), now.getMonth(), i + 1));
-  const weeks = monthMatrix(now);
+  const [offset, setOffset] = useState(0); // months from current (0 = this month)
+
+  const base = new Date();
+  base.setMonth(base.getMonth() + offset, 1);
+  const first = firstOfMonth(base);
+  const last = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+  const days = Array.from({ length: last.getDate() }, (_, i) => new Date(base.getFullYear(), base.getMonth(), i + 1));
+  const weeks = monthMatrix(base);
   const monthKey = toISODate(first);
   const startISO = toISODate(first);
   const endISO = toISODate(last);
-  const todayISOv = toISODate(now);
-  const monthLabel = now.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  const todayISOv = toISODate(new Date());
+  const monthLabel = base.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 
   const [counts, setCounts] = useState({ weekday: 0, weekend: 0 });
   const [oneOffs, setOneOffs] = useState({});
@@ -49,7 +52,7 @@ export default function Monthly() {
     setReflection(refRes.data?.content ?? '');
     const gl = goalRes.data ?? [];
     setGoals(gl);
-    const entries = await Promise.all(gl.map(async (g) => [g.id, await loadGoalActual(supabase, user.id, g)]));
+    const entries = await Promise.all(gl.map(async (g) => [g.id, await loadGoalActual(supabase, user.id, g, first)]));
     setActuals(Object.fromEntries(entries));
     setLoading(false);
   }, [user.id, startISO, endISO, monthKey]);
@@ -69,63 +72,77 @@ export default function Monthly() {
   const totalDone = logs.filter((l) => l.completed).length;
   const pctDone = totalPlanned === 0 ? 0 : Math.round((totalDone / totalPlanned) * 100);
 
-  if (loading) return <p className="muted loading-state">Loading…</p>;
   const dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const eyebrow = offset === 0 ? 'This month' : offset < 0 ? `${-offset} month${offset === -1 ? '' : 's'} ago` : `In ${offset} month${offset === 1 ? '' : 's'}`;
 
   return (
     <div className="stack-lg">
-      <header className="page-head"><p className="eyebrow">{monthLabel}</p><h1 className="display">Monthly</h1></header>
+      <header className="page-head">
+        <div className="period-nav">
+          <button type="button" className="icon-btn nav-arrow" aria-label="Previous month" onClick={() => setOffset((o) => o - 1)}>‹</button>
+          <div className="period-label">
+            <p className="eyebrow">{eyebrow}</p>
+            <h1 className="display">{monthLabel}</h1>
+          </div>
+          <button type="button" className="icon-btn nav-arrow" aria-label="Next month" onClick={() => setOffset((o) => o + 1)}>›</button>
+        </div>
+        {offset !== 0 && <button type="button" className="link-btn" onClick={() => setOffset(0)}>Back to this month</button>}
+      </header>
 
-      <section className="card stat-card">
-        <p className="big-stat">{pctDone}%</p>
-        <p className="muted">{totalDone} of {totalPlanned} planned activities completed this month</p>
-      </section>
+      {loading ? <p className="muted loading-state">Loading…</p> : (
+        <>
+          <section className="card stat-card">
+            <p className="big-stat">{pctDone}%</p>
+            <p className="muted">{totalDone} of {totalPlanned} planned activities completed</p>
+          </section>
 
-      <div className="cal">
-        <div className="cal-head">{dow.map((d) => <span key={d} className="cal-dow">{d}</span>)}</div>
-        {weeks.map((week, wi) => (
-          <div key={wi} className="cal-row">
-            {week.map((d, di) => {
-              if (!d) return <span key={di} className="cal-cell empty" />;
-              const iso = toISODate(d);
-              const planned = plannedFor(d);
-              const done = doneFor(iso);
-              const ratio = planned ? done / planned : 0;
-              const lvl = done === 0 ? 0 : ratio >= 1 ? 3 : ratio >= 0.5 ? 2 : 1;
+          <div className="cal">
+            <div className="cal-head">{dow.map((d) => <span key={d} className="cal-dow">{d}</span>)}</div>
+            {weeks.map((week, wi) => (
+              <div key={wi} className="cal-row">
+                {week.map((d, di) => {
+                  if (!d) return <span key={di} className="cal-cell empty" />;
+                  const iso = toISODate(d);
+                  const planned = plannedFor(d);
+                  const done = doneFor(iso);
+                  const ratio = planned ? done / planned : 0;
+                  const lvl = done === 0 ? 0 : ratio >= 1 ? 3 : ratio >= 0.5 ? 2 : 1;
+                  return (
+                    <Link key={di} to={`/day/${iso}`} className={`cal-cell lvl-${lvl} ${iso === todayISOv ? 'is-today' : ''}`}>
+                      <span className="cal-date">{d.getDate()}</span>
+                      <span className="cal-score">{done}/{planned}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+
+          <section className="card stack">
+            <h2 className="section-title">Monthly goals</h2>
+            {goals.length === 0 ? (
+              <p className="muted">No monthly goals. <Link to="/goals">Add one</Link> and tag activities to it.</p>
+            ) : goals.map((g) => {
+              const actual = actuals[g.id] ?? 0;
+              const pct = goalPctOf(actual, g);
               return (
-                <Link key={di} to={`/day/${iso}`} className={`cal-cell lvl-${lvl} ${iso === todayISOv ? 'is-today' : ''}`}>
-                  <span className="cal-date">{d.getDate()}</span>
-                  <span className="cal-score">{done}/{planned}</span>
-                </Link>
+                <div key={g.id} className="stack goal-mini">
+                  <div className="goal-head"><span className="activity-title">{g.title}</span><span className="muted small">{pct}%</span></div>
+                  <div className="goal-bar"><div className="goal-fill" style={{ width: `${pct}%` }} /></div>
+                  <p className="muted small">{goalLabel(g, actual)}</p>
+                </div>
               );
             })}
-          </div>
-        ))}
-      </div>
+          </section>
 
-      <section className="card stack">
-        <h2 className="section-title">Monthly goals</h2>
-        {goals.length === 0 ? (
-          <p className="muted">No monthly goals. <Link to="/goals">Add one</Link> and tag activities to it.</p>
-        ) : goals.map((g) => {
-          const actual = actuals[g.id] ?? 0;
-          const pct = goalPctOf(actual, g);
-          return (
-            <div key={g.id} className="stack goal-mini">
-              <div className="goal-head"><span className="activity-title">{g.title}</span><span className="muted small">{pct}%</span></div>
-              <div className="goal-bar"><div className="goal-fill" style={{ width: `${pct}%` }} /></div>
-              <p className="muted small">{goalLabel(g, actual)}</p>
-            </div>
-          );
-        })}
-      </section>
-
-      <section className="card reflection-card">
-        <h2 className="section-title">Monthly reflection</h2>
-        <p className="muted small">Tip: wrap private text in /* */ (an unclosed /* hides everything after). Shared viewers will not see it.</p>
-        <textarea className="reflection" rows={5} placeholder="Zoom out: how did the month go?" value={reflection}
-          onChange={(e) => setReflection(e.target.value)} onBlur={(e) => saveReflection(e.target.value)} />
-      </section>
+          <section className="card reflection-card">
+            <h2 className="section-title">Monthly reflection</h2>
+            <p className="muted small">Tip: wrap private text in /* */ (an unclosed /* hides everything after). Shared viewers will not see it.</p>
+            <textarea className="reflection" rows={5} placeholder="Zoom out: how did the month go?" value={reflection}
+              onChange={(e) => setReflection(e.target.value)} onBlur={(e) => saveReflection(e.target.value)} />
+          </section>
+        </>
+      )}
     </div>
   );
 }

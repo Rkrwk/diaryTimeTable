@@ -888,3 +888,23 @@ textarea {
   padding: 0.3rem 0.7rem;
   font-size: 0.85rem;
 }
+
+/* ---------- period navigation (weekly/monthly cycle) ---------- */
+.period-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.period-label {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.icon-btn.nav-arrow {
+  width: 40px;
+  height: 40px;
+  font-size: 1.4rem;
+  flex: 0 0 auto;
+}

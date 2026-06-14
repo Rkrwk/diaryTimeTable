@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
-import { mondayOf, toISODate, dayTypeFor, fmtMins } from '../lib/dates';
+import { mondayOf, toISODate, dayTypeFor, fmtMins, prettyShort } from '../lib/dates';
 import { loadGoalActual, goalPctOf } from '../lib/goalProgress';
 
 function goalLabel(g, actual) {
@@ -11,11 +11,16 @@ function goalLabel(g, actual) {
 
 export default function Weekly() {
   const { user } = useAuth();
-  const monday = mondayOf(new Date());
+  const [offset, setOffset] = useState(0); // weeks from current (0 = this week)
+
+  const base = new Date();
+  base.setDate(base.getDate() + offset * 7);
+  const monday = mondayOf(base);
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
   const weekKey = toISODate(monday);
   const startISO = toISODate(days[0]);
   const endISO = toISODate(days[6]);
+  const todayIso = toISODate(new Date());
 
   const [counts, setCounts] = useState({ weekday: 0, weekend: 0 });
   const [oneOffs, setOneOffs] = useState({});
@@ -44,7 +49,7 @@ export default function Weekly() {
     setReflection(refRes.data?.content ?? '');
     const gl = goalRes.data ?? [];
     setGoals(gl);
-    const entries = await Promise.all(gl.map(async (g) => [g.id, await loadGoalActual(supabase, user.id, g)]));
+    const entries = await Promise.all(gl.map(async (g) => [g.id, await loadGoalActual(supabase, user.id, g, monday)]));
     setActuals(Object.fromEntries(entries));
     setLoading(false);
   }, [user.id, startISO, endISO, weekKey]);
@@ -64,51 +69,66 @@ export default function Weekly() {
   const totalDone = days.reduce((s, d) => s + doneFor(d), 0);
   const pctDone = totalPlanned === 0 ? 0 : Math.round((totalDone / totalPlanned) * 100);
 
-  if (loading) return <p className="muted loading-state">Loading…</p>;
   const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const eyebrow = offset === 0 ? 'This week' : offset < 0 ? `${-offset} week${offset === -1 ? '' : 's'} ago` : `In ${offset} week${offset === 1 ? '' : 's'}`;
 
   return (
     <div className="stack-lg">
-      <header className="page-head"><p className="eyebrow">Week of {startISO}</p><h1 className="display">Weekly</h1></header>
+      <header className="page-head">
+        <div className="period-nav">
+          <button type="button" className="icon-btn nav-arrow" aria-label="Previous week" onClick={() => setOffset((o) => o - 1)}>‹</button>
+          <div className="period-label">
+            <p className="eyebrow">{eyebrow}</p>
+            <h1 className="display">Weekly</h1>
+            <p className="muted small">{prettyShort(days[0])} – {prettyShort(days[6])}</p>
+          </div>
+          <button type="button" className="icon-btn nav-arrow" aria-label="Next week" onClick={() => setOffset((o) => o + 1)}>›</button>
+        </div>
+        {offset !== 0 && <button type="button" className="link-btn" onClick={() => setOffset(0)}>Back to this week</button>}
+      </header>
 
-      <section className="card stat-card">
-        <p className="big-stat">{pctDone}%</p>
-        <p className="muted">{totalDone} of {totalPlanned} planned activities completed this week</p>
-      </section>
+      {loading ? <p className="muted loading-state">Loading…</p> : (
+        <>
+          <section className="card stat-card">
+            <p className="big-stat">{pctDone}%</p>
+            <p className="muted">{totalDone} of {totalPlanned} planned activities completed</p>
+          </section>
 
-      <div className="week-grid">
-        {days.map((d, i) => (
-          <Link key={i} to={`/day/${toISODate(d)}`} className="day-cell card day-link">
-            <span className="day-label">{labels[i]}</span>
-            <span className="day-date">{d.getDate()}</span>
-            <span className="day-score">{doneFor(d)}/{plannedFor(d)}</span>
-          </Link>
-        ))}
-      </div>
+          <div className="week-grid">
+            {days.map((d, i) => (
+              <Link key={i} to={`/day/${toISODate(d)}`} className={`day-cell card day-link ${toISODate(d) === todayIso ? 'is-today' : ''}`}>
+                <span className="day-label">{labels[i]}</span>
+                <span className="day-date">{d.getDate()}</span>
+                <span className="day-score">{doneFor(d)}/{plannedFor(d)}</span>
+              </Link>
+            ))}
+          </div>
 
-      <section className="card stack">
-        <h2 className="section-title">Weekly goals</h2>
-        {goals.length === 0 ? (
-          <p className="muted">No weekly goals. <Link to="/goals">Add one</Link> and tag activities to it.</p>
-        ) : goals.map((g) => {
-          const actual = actuals[g.id] ?? 0;
-          const pct = goalPctOf(actual, g);
-          return (
-            <div key={g.id} className="stack goal-mini">
-              <div className="goal-head"><span className="activity-title">{g.title}</span><span className="muted small">{pct}%</span></div>
-              <div className="goal-bar"><div className="goal-fill" style={{ width: `${pct}%` }} /></div>
-              <p className="muted small">{goalLabel(g, actual)}</p>
-            </div>
-          );
-        })}
-      </section>
+          <section className="card stack">
+            <h2 className="section-title">Weekly goals</h2>
+            {goals.length === 0 ? (
+              <p className="muted">No weekly goals. <Link to="/goals">Add one</Link> and tag activities to it.</p>
+            ) : goals.map((g) => {
+              const actual = actuals[g.id] ?? 0;
+              const pct = goalPctOf(actual, g);
+              return (
+                <div key={g.id} className="stack goal-mini">
+                  <div className="goal-head"><span className="activity-title">{g.title}</span><span className="muted small">{pct}%</span></div>
+                  <div className="goal-bar"><div className="goal-fill" style={{ width: `${pct}%` }} /></div>
+                  <p className="muted small">{goalLabel(g, actual)}</p>
+                </div>
+              );
+            })}
+          </section>
 
-      <section className="card reflection-card">
-        <h2 className="section-title">Weekly reflection</h2>
-        <p className="muted small">Tip: wrap private text in /* */ (an unclosed /* hides everything after). Shared viewers will not see it.</p>
-        <textarea className="reflection" rows={4} placeholder="What went well? What to adjust?" value={reflection}
-          onChange={(e) => setReflection(e.target.value)} onBlur={(e) => saveReflection(e.target.value)} />
-      </section>
+          <section className="card reflection-card">
+            <h2 className="section-title">Weekly reflection</h2>
+            <p className="muted small">Tip: wrap private text in /* */ (an unclosed /* hides everything after). Shared viewers will not see it.</p>
+            <textarea className="reflection" rows={4} placeholder="What went well? What to adjust?" value={reflection}
+              onChange={(e) => setReflection(e.target.value)} onBlur={(e) => saveReflection(e.target.value)} />
+          </section>
+        </>
+      )}
     </div>
   );
 }
