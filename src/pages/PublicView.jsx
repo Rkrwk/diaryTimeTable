@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { todayISO, toISODate, dayTypeFor, mondayOf, firstOfMonth, monthMatrix, prettyShort, parseISO, fmtMins } from '../lib/dates';
+import { todayISO, toISODate, dayTypeFor, mondayOf, firstOfMonth, monthMatrix, prettyShort, parseISO, fmtMins, durationMins } from '../lib/dates';
 
 function pct(done, planned) {
   return !planned ? 0 : Math.round((done / planned) * 100);
 }
 function goalPct(actual, target) {
   return !target ? 0 : Math.min(100, Math.round((actual / target) * 100));
+}
+function tagHours(acts) {
+  const byCat = {};
+  (acts || []).forEach((a) => { const m = durationMins(a.actual_start, a.actual_end); if (m > 0) byCat[a.category] = (byCat[a.category] || 0) + m; });
+  return Object.entries(byCat).sort((x, y) => y[1] - x[1]);
+}
+function TagHours({ acts }) {
+  const entries = tagHours(acts);
+  if (entries.length === 0) return null;
+  return (<div className="cat-hours">{entries.map(([c, m]) => <span key={c} className="cat-hour-pill">{c}: {fmtMins(m)}</span>)}</div>);
 }
 
 export default function PublicView() {
@@ -192,6 +202,7 @@ export default function PublicView() {
                   ))}
                 </ul>
               )}
+              <TagHours acts={day.activities} />
               {day.week_start !== curWeekStart && day.week_reflection && (
                 <div className="stack-tight">
                   <p className="eyebrow">Week of {day.week_start}</p>
@@ -234,6 +245,7 @@ export default function PublicView() {
                 ))}
               </ul>
             )}
+            <TagHours acts={data.today} />
           </section>
         </>
       )}
