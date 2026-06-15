@@ -908,3 +908,72 @@ textarea {
   font-size: 1.4rem;
   flex: 0 0 auto;
 }
+
+/* ---------- category chip, color swatches, per-tag hours ---------- */
+.cat-chip {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: lowercase;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  font-family: var(--sans);
+}
+.cat-chip:hover { color: var(--ink); border-color: var(--accent); }
+.cat-edit-input {
+  width: auto;
+  max-width: 160px;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.8rem;
+}
+
+.swatches {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.row-swatches { margin: 0.2rem 0 0.2rem 2.4rem; }
+.swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  padding: 0;
+  background: var(--card);
+}
+.swatch.sel {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+.swatch.tag-default {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--bg);
+}
+.swatch.dot-btn {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
+.cat-hours {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.cat-hour-pill {
+  font-size: 0.8rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}

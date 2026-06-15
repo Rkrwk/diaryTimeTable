@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_SCHEDULE } from '../lib/defaultSchedule';
-import { todayISO, dayTypeFor, prettyDate, nowHHMM } from '../lib/dates';
+import { todayISO, dayTypeFor, prettyDate, nowHHMM, durationMins, fmtMins } from '../lib/dates';
 
 function hhmm(value) {
   return value ? value.slice(0, 5) : '';
@@ -14,7 +14,8 @@ function arrayMove(arr, from, to) {
   return next;
 }
 
-const emptyAdd = { title: '', planned_start: '', planned_end: '', category: 'focus', goal_id: '' };
+const COLORS = ['#3f6fb0', '#4e944f', '#d6a32e', '#b0463f', '#7a5bb0', '#3f9b9b'];
+const emptyAdd = { title: '', planned_start: '', planned_end: '', category: 'focus', goal_id: '', color: '' };
 
 export default function Today() {
   const { user } = useAuth();
@@ -29,14 +30,16 @@ export default function Today() {
   const [add, setAdd] = useState(emptyAdd);
   const [showAdd, setShowAdd] = useState(false);
 
-  // autosave status (the writes already happen automatically; this just reports them)
-  const [saveState, setSaveState] = useState('idle'); // 'idle' | 'saving' | 'saved'
+  const [saveState, setSaveState] = useState('idle');
   const savingRef = useRef(0);
   function beginSave() { savingRef.current += 1; setSaveState('saving'); }
   function endSave() { savingRef.current = Math.max(0, savingRef.current - 1); if (savingRef.current === 0) setSaveState('saved'); }
 
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [editingCatId, setEditingCatId] = useState(null);
+  const [editingCat, setEditingCat] = useState('');
+  const [colorEditId, setColorEditId] = useState(null);
 
   const [drag, setDrag] = useState(null);
   const itemRefs = useRef({});
@@ -44,20 +47,14 @@ export default function Today() {
   const liveDrag = useRef(null);
   const activitiesRef = useRef([]);
 
-  useEffect(() => {
-    activitiesRef.current = activities;
-  }, [activities]);
+  useEffect(() => { activitiesRef.current = activities; }, [activities]);
 
   const load = useCallback(async () => {
     setLoading(true);
     const [actRes, logRes, refRes, goalRes] = await Promise.all([
-      supabase
-        .from('activities')
-        .select('*')
-        .eq('owner_id', user.id)
+      supabase.from('activities').select('*').eq('owner_id', user.id)
         .or(`and(day_type.eq.${dayType},entry_date.is.null),entry_date.eq.${date}`)
-        .order('sort_order', { ascending: true })
-        .order('created_at', { ascending: true }),
+        .order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
       supabase.from('logs').select('*').eq('owner_id', user.id).eq('log_date', date),
       supabase.from('reflections').select('*').eq('owner_id', user.id).eq('period_type', 'daily').eq('period_date', date).maybeSingle(),
       supabase.from('goals').select('id, title, period_type, metric').eq('owner_id', user.id).order('created_at', { ascending: true }),
@@ -87,7 +84,7 @@ export default function Today() {
     const { error } = await supabase.from('activities').insert({
       owner_id: user.id, title: add.title.trim(), day_type: dayType, category: add.category.trim() || 'rest',
       planned_start: add.planned_start || null, planned_end: add.planned_end || null,
-      sort_order: nextOrder, entry_date: date, goal_id: add.goal_id || null,
+      sort_order: nextOrder, entry_date: date, goal_id: add.goal_id || null, color: add.color || null,
     });
     if (error) { alert(error.message); return; }
     setAdd(emptyAdd);
@@ -105,10 +102,10 @@ export default function Today() {
     load();
   }
 
-  async function updateGoal(a, goalId) {
-    setActivities((prev) => prev.map((x) => (x.id === a.id ? { ...x, goal_id: goalId || null } : x)));
+  async function updateField(a, patch) {
+    setActivities((prev) => prev.map((x) => (x.id === a.id ? { ...x, ...patch } : x)));
     beginSave();
-    const { error } = await supabase.from('activities').update({ goal_id: goalId || null }).eq('id', a.id);
+    const { error } = await supabase.from('activities').update(patch).eq('id', a.id);
     endSave();
     if (error) { alert(error.message); load(); }
   }
@@ -118,11 +115,20 @@ export default function Today() {
     const title = editingTitle.trim();
     setEditingId(null);
     if (!title || title === a.title) return;
-    setActivities((prev) => prev.map((x) => (x.id === a.id ? { ...x, title } : x)));
-    beginSave();
-    const { error } = await supabase.from('activities').update({ title }).eq('id', a.id);
-    endSave();
-    if (error) { alert(error.message); load(); }
+    updateField(a, { title });
+  }
+
+  function startCatEdit(a) { setEditingCatId(a.id); setEditingCat(a.category); }
+  async function saveCat(a) {
+    const category = editingCat.trim() || 'rest';
+    setEditingCatId(null);
+    if (category === a.category) return;
+    updateField(a, { category });
+  }
+
+  async function updateColor(a, color) {
+    setColorEditId(null);
+    updateField(a, { color: color || null });
   }
 
   const handleMove = useCallback((e) => {
@@ -200,8 +206,19 @@ export default function Today() {
 
   const doneCount = activities.filter((a) => logs[a.id]?.completed).length;
 
+  // total active time per category tag (from logged actual times)
+  const byCat = {};
+  activities.forEach((a) => {
+    const l = logs[a.id];
+    const mins = l ? durationMins(hhmm(l.actual_start), hhmm(l.actual_end)) : 0;
+    if (mins > 0) byCat[a.category] = (byCat[a.category] ?? 0) + mins;
+  });
+  const catEntries = Object.entries(byCat).sort((x, y) => y[1] - x[1]);
+
   return (
     <div className="stack-lg">
+      <datalist id="cat-presets"><option value="focus" /><option value="move" /><option value="rest" /></datalist>
+
       <header className="page-head">
         <p className="eyebrow">{dayType === 'weekend' ? 'Weekend' : 'Weekday'}</p>
         <h1 className="display">{prettyDate()}</h1>
@@ -209,9 +226,7 @@ export default function Today() {
           <p className="tally">{doneCount}/{activities.length} done</p>
           <div className="save-bar">
             <span className={`save-dot ${saveState}`} />
-            <span className="muted small">
-              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Auto-saves as you go"}
-            </span>
+            <span className="muted small">{saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Auto-saves as you go"}</span>
             <button type="button" className="btn save-btn" onClick={() => setSaveState("saved")} title="Changes save automatically">Save</button>
           </div>
         </div>
@@ -232,8 +247,10 @@ export default function Today() {
             const completed = !!log.completed;
             const isDragging = drag && drag.fromIndex === i;
             const goal = a.goal_id ? goals.find((g) => g.id === a.goal_id) : null;
+            const ds = dragStyle(i);
+            const liStyle = a.color ? { ...(ds || {}), borderLeftColor: a.color } : ds;
             return (
-              <li key={a.id} ref={(el) => { if (el) itemRefs.current[a.id] = el; }} style={dragStyle(i)}
+              <li key={a.id} ref={(el) => { if (el) itemRefs.current[a.id] = el; }} style={liStyle}
                 className={`card activity cat-${a.category} ${completed ? 'is-done' : ''} ${isDragging ? 'dragging' : ''}`}>
                 <div className="activity-top">
                   <button type="button" className={`check ${completed ? 'checked' : ''}`} aria-pressed={completed}
@@ -253,11 +270,20 @@ export default function Today() {
                         <button type="button" className="icon-btn ghost" aria-label="Edit name" onClick={() => startEdit(a)}>✎</button>
                       </span>
                     )}
+                    <span className="title-row">
+                      {editingCatId === a.id ? (
+                        <input list="cat-presets" className="cat-edit-input" autoFocus value={editingCat}
+                          onChange={(e) => setEditingCat(e.target.value)} onBlur={() => saveCat(a)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingCatId(null); }} />
+                      ) : (
+                        <button type="button" className="cat-chip" onClick={() => startCatEdit(a)} title="Edit tag">{a.category}</button>
+                      )}
+                    </span>
                     <span className="muted small">Planned {hhmm(a.planned_start) || '—'}–{hhmm(a.planned_end) || '—'}</span>
                     {goals.length > 0 && (
                       <label className="goal-assign muted small">
                         Counts toward:{' '}
-                        <select value={a.goal_id || ''} onChange={(e) => updateGoal(a, e.target.value)}>
+                        <select value={a.goal_id || ''} onChange={(e) => updateField(a, { goal_id: e.target.value || null })}>
                           <option value="">— none —</option>
                           {goals.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}
                         </select>
@@ -265,10 +291,21 @@ export default function Today() {
                     )}
                   </div>
                   <div className="row-tools">
+                    <button type="button" className="swatch dot-btn" style={{ background: a.color || 'var(--border)' }}
+                      aria-label="Color" title="Color" onClick={() => setColorEditId(colorEditId === a.id ? null : a.id)} />
                     <button type="button" className="icon-btn drag-handle" aria-label="Drag to reorder" onPointerDown={(e) => onHandleDown(e, i)}>⠿</button>
                     <button type="button" className="icon-btn danger" aria-label="Remove" onClick={() => removeActivity(a)}>×</button>
                   </div>
                 </div>
+
+                {colorEditId === a.id && (
+                  <div className="swatches row-swatches">
+                    <button type="button" className={`swatch tag-default ${!a.color ? 'sel' : ''}`} title="Use tag color" onClick={() => updateColor(a, '')}>T</button>
+                    {COLORS.map((c) => (
+                      <button key={c} type="button" className={`swatch ${a.color === c ? 'sel' : ''}`} style={{ background: c }} aria-label={c} onClick={() => updateColor(a, c)} />
+                    ))}
+                  </div>
+                )}
 
                 <div className="time-row">
                   <div className="time-field">
@@ -298,8 +335,7 @@ export default function Today() {
             <label className="field"><span>Title</span>
               <input type="text" value={add.title} onChange={(e) => setAdd({ ...add, title: e.target.value })} placeholder="What did you do?" required /></label>
             <label className="field"><span>Category</span>
-              <input list="cat-presets" value={add.category} onChange={(e) => setAdd({ ...add, category: e.target.value })} placeholder="focus, move, rest, or your own" />
-              <datalist id="cat-presets"><option value="focus" /><option value="move" /><option value="rest" /></datalist></label>
+              <input list="cat-presets" value={add.category} onChange={(e) => setAdd({ ...add, category: e.target.value })} placeholder="focus, move, rest, or your own" /></label>
             <label className="field"><span>Start</span>
               <input type="time" value={add.planned_start} onChange={(e) => setAdd({ ...add, planned_start: e.target.value })} /></label>
             <label className="field"><span>End</span>
@@ -311,6 +347,14 @@ export default function Today() {
                   {goals.map((g) => <option key={g.id} value={g.id}>{g.title}</option>)}
                 </select></label>
             )}
+            <label className="field"><span>Color</span>
+              <div className="swatches">
+                <button type="button" className={`swatch tag-default ${!add.color ? 'sel' : ''}`} title="Use tag color" onClick={() => setAdd({ ...add, color: '' })}>T</button>
+                {COLORS.map((c) => (
+                  <button key={c} type="button" className={`swatch ${add.color === c ? 'sel' : ''}`} style={{ background: c }} aria-label={c} onClick={() => setAdd({ ...add, color: c })} />
+                ))}
+              </div>
+            </label>
           </div>
           <div className="empty-actions">
             <button type="submit" className="btn primary">Add</button>
@@ -325,6 +369,13 @@ export default function Today() {
 
       <section className="card reflection-card">
         <h2 className="section-title">Today&rsquo;s reflection</h2>
+        {catEntries.length > 0 && (
+          <div className="cat-hours">
+            {catEntries.map(([c, m]) => (
+              <span key={c} className="cat-hour-pill">{c}: {fmtMins(m)}</span>
+            ))}
+          </div>
+        )}
         <p className="muted small">Tip: wrap private text in /* */ (an unclosed /* hides everything after). Shared viewers will not see it.</p>
         <textarea className="reflection" rows={4} placeholder="How did today go?" value={reflection}
           onChange={(e) => setReflection(e.target.value)} onBlur={(e) => saveReflection(e.target.value)} />

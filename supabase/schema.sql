@@ -54,6 +54,7 @@ create table if not exists activities (
   category       text not null default 'rest',
   sort_order     int  not null default 0,
   entry_date     date,
+  color          text,
   created_at     timestamptz default now()
 );
 
