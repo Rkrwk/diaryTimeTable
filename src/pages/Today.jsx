@@ -312,11 +312,13 @@ export default function Today() {
                     <label><span className="small muted">Started</span>
                       <input type="time" value={hhmm(log.actual_start)} onChange={(e) => saveLog(a.id, { actual_start: e.target.value || null })} /></label>
                     <button type="button" className="now-btn" onClick={() => saveLog(a.id, { actual_start: nowHHMM() })}>Now</button>
+                    {a.planned_start && <button type="button" className="now-btn" title="Use planned time" onClick={() => saveLog(a.id, { actual_start: hhmm(a.planned_start) })}>Plan</button>}
                   </div>
                   <div className="time-field">
                     <label><span className="small muted">Ended</span>
                       <input type="time" value={hhmm(log.actual_end)} onChange={(e) => saveLog(a.id, { actual_end: e.target.value || null })} /></label>
                     <button type="button" className="now-btn" onClick={() => saveLog(a.id, { actual_end: nowHHMM() })}>Now</button>
+                    {a.planned_end && <button type="button" className="now-btn" title="Use planned time" onClick={() => saveLog(a.id, { actual_end: hhmm(a.planned_end) })}>Plan</button>}
                   </div>
                 </div>
 
