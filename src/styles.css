@@ -675,15 +675,6 @@ textarea {
 }
 
 /* ---------- drag reorder + inline title edit ---------- */
-.activity {
-  transition: transform 180ms ease;
-  will-change: transform;
-}
-
-.activity-list.no-motion .activity {
-  transition: none !important;
-}
-
 .activity.dragging {
   transition: none;
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
