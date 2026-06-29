@@ -46,6 +46,8 @@ export default function Today() {
   const metrics = useRef(null);
   const liveDrag = useRef(null);
   const activitiesRef = useRef([]);
+  const lastClientYRef = useRef(0);
+  const lastScrollYRef = useRef(0);
 
   useEffect(() => { activitiesRef.current = activities; }, [activities]);
 
@@ -131,10 +133,10 @@ export default function Today() {
     updateField(a, { color: color || null });
   }
 
-  const handleMove = useCallback((e) => {
+  const processDrag = useCallback((clientY) => {
     const m = metrics.current;
     if (!m) return;
-    const dy = e.clientY - m.startY;
+    const dy = clientY - m.startY;
     const draggedCenter = m.centers[m.fromIndex] + dy;
     let target = m.fromIndex;
     if (dy > 0) { for (let i = m.fromIndex + 1; i < m.centers.length; i++) if (draggedCenter >= m.centers[i]) target = i; }
@@ -144,14 +146,18 @@ export default function Today() {
     setDrag(next);
   }, []);
 
+  const handleMove = useCallback((e) => {
+    lastClientYRef.current = e.clientY;
+    processDrag(e.clientY);
+  }, [processDrag]);
+
   const dragListenersRef = useRef({});
 
   const removeDragListeners = useCallback(() => {
-    const { move, up, cancel, wheel } = dragListenersRef.current;
-    if (move)   window.removeEventListener('pointermove', move);
-    if (up)     window.removeEventListener('pointerup', up);
-    if (cancel) window.removeEventListener('pointercancel', cancel);
-    if (wheel)  window.removeEventListener('wheel', wheel);
+    const { move, up, scroll } = dragListenersRef.current;
+    if (move)   window.removeEventListener('mousemove', move);
+    if (up)     window.removeEventListener('mouseup', up);
+    if (scroll) window.removeEventListener('scroll', scroll);
     dragListenersRef.current = {};
   }, []);
 
@@ -170,12 +176,6 @@ export default function Today() {
     if (failed) { alert(failed.error.message); load(); }
   }, [removeDragListeners, load]);
 
-  const handleCancel = useCallback(() => {
-    removeDragListeners();
-    metrics.current = null; liveDrag.current = null;
-    setDrag(null);
-  }, [removeDragListeners]);
-
   function onHandleDown(e, fromIndex) {
     e.preventDefault();
     const order = activitiesRef.current;
@@ -184,14 +184,30 @@ export default function Today() {
     const centers = tops.map((t, i) => t + heights[i] / 2);
     const slot = tops.length > 1 ? tops[1] - tops[0] : heights[0] + 14;
     metrics.current = { tops, heights, centers, slot, startY: e.clientY, fromIndex };
+    lastClientYRef.current = e.clientY;
+    lastScrollYRef.current = window.scrollY;
     const init = { fromIndex, target: fromIndex, dy: 0 };
     liveDrag.current = init; setDrag(init);
-    const wheelBlock = (ev) => ev.preventDefault();
-    dragListenersRef.current = { move: handleMove, up: handleUp, cancel: handleCancel, wheel: wheelBlock };
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp, { once: true });
-    window.addEventListener('pointercancel', handleCancel, { once: true });
-    window.addEventListener('wheel', wheelBlock, { passive: false });
+
+    // Use mouse events — unlike pointer events, these are not cancelled by scroll wheel
+    const onScroll = () => {
+      if (!metrics.current) return;
+      const delta = window.scrollY - lastScrollYRef.current;
+      lastScrollYRef.current = window.scrollY;
+      // Shift startY so the dragged item stays visually under the cursor
+      metrics.current.startY -= delta;
+      // Refresh other items' viewport centers after scroll
+      activitiesRef.current.forEach((a, i) => {
+        const r = itemRefs.current[a.id]?.getBoundingClientRect();
+        if (r) metrics.current.centers[i] = r.top + r.height / 2;
+      });
+      processDrag(lastClientYRef.current);
+    };
+
+    dragListenersRef.current = { move: handleMove, up: handleUp, scroll: onScroll };
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp, { once: true });
+    window.addEventListener('scroll', onScroll, { passive: true });
   }
 
   function dragStyle(index) {
