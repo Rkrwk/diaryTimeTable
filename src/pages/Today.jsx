@@ -144,8 +144,19 @@ export default function Today() {
     setDrag(next);
   }, []);
 
+  const dragListenersRef = useRef({});
+
+  const removeDragListeners = useCallback(() => {
+    const { move, up, cancel, wheel } = dragListenersRef.current;
+    if (move)   window.removeEventListener('pointermove', move);
+    if (up)     window.removeEventListener('pointerup', up);
+    if (cancel) window.removeEventListener('pointercancel', cancel);
+    if (wheel)  window.removeEventListener('wheel', wheel);
+    dragListenersRef.current = {};
+  }, []);
+
   const handleUp = useCallback(async () => {
-    window.removeEventListener('pointermove', handleMove);
+    removeDragListeners();
     const cur = liveDrag.current;
     metrics.current = null; liveDrag.current = null;
     setDrag(null);
@@ -157,7 +168,13 @@ export default function Today() {
     const results = await Promise.all(updates.map((a) => supabase.from('activities').update({ sort_order: a.sort_order }).eq('id', a.id)));
     const failed = results.find((r) => r.error);
     if (failed) { alert(failed.error.message); load(); }
-  }, [handleMove, load]);
+  }, [removeDragListeners, load]);
+
+  const handleCancel = useCallback(() => {
+    removeDragListeners();
+    metrics.current = null; liveDrag.current = null;
+    setDrag(null);
+  }, [removeDragListeners]);
 
   function onHandleDown(e, fromIndex) {
     e.preventDefault();
@@ -169,8 +186,12 @@ export default function Today() {
     metrics.current = { tops, heights, centers, slot, startY: e.clientY, fromIndex };
     const init = { fromIndex, target: fromIndex, dy: 0 };
     liveDrag.current = init; setDrag(init);
+    const wheelBlock = (ev) => ev.preventDefault();
+    dragListenersRef.current = { move: handleMove, up: handleUp, cancel: handleCancel, wheel: wheelBlock };
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', handleUp, { once: true });
+    window.addEventListener('pointercancel', handleCancel, { once: true });
+    window.addEventListener('wheel', wheelBlock, { passive: false });
   }
 
   function dragStyle(index) {
